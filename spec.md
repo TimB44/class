@@ -7,37 +7,35 @@ code. This specification describes the 2025 edition of the language.
 Lexical Syntax
 --------------
 
-JPL contains 7 kinds of tokens: keywords, punctuation, variables,
-integer literals, float literals, strings, and newlines. There can
-also be whitespace between the tokens.
+JPL contains four kinds of tokens (words, numbers, punctuation,
+strings, newlines, and whitespace).
 
-The *keywords* are: `array`, `assert`, `bool`, `else`, `false`, `float`,
-`fn`, `if`, `image`, `int`, `let`, `print`, `read`, `return`, `show`,
-`struct`, `sum`, `then`, `time`, `to`, `true`, `type`, `void`, `write`.
+*Punctuation* comes in two classes. Literal tokens are: `:`, `{`, `}`,
+`(`, `)`, `[`, `]`, `,`, and `=`. Each generates a single token named
+after the character. Operator tokens are `+`, `-`, `*`, `/`, `%`, `<`,
+`>`, `&&`, `||`, `==`, `!=`, `<=`, `>=`. Each generates a single token
+named `OP`.
 
-The *punctuation* characters are: `:`, `{`, `}`, `(`, `)`, `[`, `]`,
-`,`, `=`, `+`, `-`, `*`, `/`, `%`, `<`, `>`, `&&`, `||`, `==`, `!=`,
-`<=`, `>=`.
+*Words* are a letter (upper case A-Z or lower case a-z) followed by
+any number of letters or digits, underscores. The following words are
+keywords, and generate a single token named after the keyword:
+`array`, `assert`, `bool`, `else`, `false`, `float`, `fn`, `if`,
+`image`, `int`, `let`, `print`, `read`, `return`, `show`, `struct`,
+`sum`, `then`, `time`, `to`, `true`, `type`, `void`, `write`. All
+other words generate a `VARIABLE` token.
 
-*Variables* are a letter (upper case A-Z or lower case a-z) followed
-by any number of letters or digits, underscores, *except* when the
-sequence of letters and digits is a keyword.
+*Numbers* are sequence of digits and dots, containing at most one dot
+and at least one dot or digit. A lone dot, with no digits, is a
+special punctuation token. A number with a dot is a floating-point
+literal, and generates a `FLOATVAL` token. Otherwise, the number is an
+integer and generates an `INTVAL` token. Note that scientific notation
+is not supported.
 
-An *integer* literal is a sequence of one or more digits. An integer
-literal that does not map to a 64-bit two's complement value
-(e.g. 9999999999999999999999) is a compile-time error; in other words
-the minimum integer value is `-2^63` and the maximum integer value is
-`2^63 - 1`.
-
-A *float* literal is a sequence of digits, a dot, and another sequence
-of digits; one of the two sequences must be non-empty. The dot is
-required. Scientific notation is not supported. Literals mapping to
-infinity are not supported. Do not write your own code to convert
-float syntax to float values! (It is much harder and subtler than you
-probably think!) Use the C library function `strtod` or its binding in
-your language of choice (ex. Python's `float`) to perform the
-conversion. If this conversion is error-free, then the literal is
-legal, otherwise the JPL compiler must signal a compile-time error.
+Some numbers are invalid due to ranges. An integer literal that does
+not fit in a 64-bit two's complement representation is a lexer error;
+in other words the minimum integer value is `-2^63` and the maximum
+integer value is `2^63 - 1`. Likewise, a floating-point literal that
+maps to infinity.
 
 *Strings* are a double quote, any sequence of legal characters except
 double quote and newline, and then another double quote. Character
@@ -45,10 +43,8 @@ escapes like `\n` aren't supported (you're not going to need them).
 Multi-line string literals are not supported.
 
 *Whitespace* is allowed between any two tokens and consists of any
-sequence of spaces, line comments, block comments, and newline
-escapes. Line comments are a `//`, followed by any sequence of
-non-newline characters. Block comments are a `/*`, followed by
-any sequence of characters not including `*/`, followed by `*/`.
+sequence of spaces, line comments, and newline escapes. Line comments
+are a `//`, followed by any sequence of non-newline characters.
 Newline escapes are a backslash followed immediately by a newline.
 
 A *newline* is any sequence of newline characters (ASCII 10) and
@@ -254,7 +250,7 @@ is built-in.
 To construct a structure, you need to give a value for each field:
 
 ```
-expr : <variable> { <variable> : <expr> , ... }
+expr : <variable> { <expr> , ... }
 ```
 
 The special `void` structure has just one value:
