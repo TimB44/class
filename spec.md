@@ -11,10 +11,10 @@ JPL contains four kinds of tokens (words, numbers, punctuation,
 strings, newlines, and whitespace).
 
 *Punctuation* comes in two classes. Literal tokens are: `:`, `{`, `}`,
-`(`, `)`, `[`, `]`, `,`, and `=`. Each generates a single token named
-after the character. Operator tokens are `+`, `-`, `*`, `/`, `%`, `<`,
-`>`, `&&`, `||`, `==`, `!=`, `<=`, `>=`. Each generates a single token
-named `OP`.
+`(`, `)`, `[`, `]`, `,`, `.`, and `=`. Each generates a single token
+named after the character. Operator tokens are `+`, `-`, `*`, `/`,
+`%`, `<`, `>`, `&&`, `||`, `==`, `!=`, `<=`, `>=`. Each generates a
+single token named `OP`.
 
 *Words* are a letter (upper case A-Z or lower case a-z) followed by
 any number of letters or digits, underscores. The following words are
@@ -26,7 +26,7 @@ other words generate a `VARIABLE` token.
 
 *Numbers* are sequence of digits and dots, containing at most one dot
 and at least one dot or digit. A lone dot, with no digits, is a
-special punctuation token. A number with a dot is a floating-point
+literal punctuation token. A number with a dot is a floating-point
 literal, and generates a `FLOATVAL` token. Otherwise, the number is an
 integer and generates an `INTVAL` token. Note that scientific notation
 is not supported.
@@ -50,11 +50,10 @@ Newline escapes are a backslash followed immediately by a newline.
 A *newline* is any sequence of newline characters (ASCII 10) and
 whitespace containing at least one newline, except at the beginning of
 the program. This means multiple consecutive newline tokens should
-never occur (they should be squashed into one newline token). Note
-that the newline at the end of a line comment still generates a
-newline token, but newlines inside a block comment do not. However, if
-a program starts with whitespace or newlines, no newline token should
-be generated.
+never occur (they should be squashed into one newline token). The
+newline at the end of a line comment still generates a newline token.
+However, if a program starts with whitespace or newlines, no newline
+token should be generated.
 
 All other characters are illegal, and an appropriate lexer error
 should be raised if any occur in a JPL program. That includes tabs and
@@ -80,17 +79,17 @@ final trailing comma is not allowed.
 
 ### Primitive Values
 
-The promitrive types are Booleans, 64-bit signed integers, and 64-bit
+The primitrive types are Booleans, 64-bit signed integers, and 64-bit
 (double precision) floats:
 
 ```
 type : int
-     | bool
      | float
+     | bool
 ```
 
 JPL does not have any implicit conversions between types. This means
-only one of `x / 2` or `x / 2.` will typecheck, for any given `x`.
+at most one of `x / 2` or `x / 2.` will typecheck for any given `x`.
 
 Values of these types can be written directly:
 
@@ -150,7 +149,7 @@ Precedence is necessary to disambiguate certain constructs. The
 binding strength is:
 
 - Postfix `[]` and `.` have the highest precedence
-- Multiplicative binary operators `*`, `/`, and `%` have third highest
+- Multiplicative binary operators `*`, `/`, and `%` have next highest
 - Additive binary operators `+` and `-` are next
 - Binary comparisons `<`, `>`, `<=`, `>=`, `==`, and `!=` are next
 - Boolean binary operators `&&` and `||` are next
@@ -162,6 +161,9 @@ to override precedence:
 ```
 expr : ( <expr> )
 ```
+
+Note that parentheses should do not actually create an AST node; they
+should only influence the parser.
 
 > For example,
 >
@@ -212,12 +214,14 @@ expr : array [ <variable> : <expr> , ... ] <expr>
      | sum [ <variable> : <expr> , ... ] <expr>
 ```
 
+`array` expressions yield an array, whose rank is given by the number
+of bindings. `sum` expressions yield an integer or a float, depending
+on the body expression.
+
 Each expression in the list of bindings (between the square brackets)
-must produce an integer, and in the body of the loop (after the square
-brackets) those variables are bound to integers. `array` expressions
-yield an array, whose rank is given by the number of bindings. `sum`
-expressions yield an integer or a float, depending on the body
-expression.
+must produce an integer which gives the loop bound for that dimension.
+In the body of the loop (after the square brackets) those variables
+are bound to integers. Negative or zero loop bounds are not allowed.
 
 ### Structures
 
@@ -267,6 +271,7 @@ expr : <expr> . <variable>
 
 Naturally, when constructing or accessing a structure, all of the
 field names have to be valid and be constructed with the right type.
+The `void` type has no fields.
 
 ### Input/Output
 
@@ -274,8 +279,15 @@ Commands are only available at the top level (not inside functions)
 and are the only way side effects occur. Commands deal largely with
 input and output.
 
-PNG images are the main input/output format. PNG files read as
-`rgba[H,W]`, where the `rgba` structure is defined like so:
+PNG images are the main input/output format:
+
+```
+cmd  : write image <expr> to <string>
+     | read image <string> to <lvalue>
+```
+
+PNG files read as `rgba[H,W]`, where the `rgba` structure is
+pre-defined like so:
 
     struct rgba {
         r : float
@@ -334,7 +346,8 @@ expr : <variable> ( <expr> , ... )
 ```
 
 Zero-argument functions can't be defined or called. This makes parsing
-a bit more convenient, and doesn't impact usability much.
+a bit more convenient, and doesn't impact usability much, because a
+zero-argument function can't do anything useful anyway.
 
 Variables are defined with `let` commands/statements. (They are also
 introduced by function arguments and `read` commands.)
@@ -401,8 +414,8 @@ language's equivalent.[1]
     side and return `NaN` instead of throwing an exception.
 
 The compiler does not have to preserve the contents, count, or order
-of `time` expressions. That said, times should be as precise as
-possible---at least millisecond accuracy.
+of prints from `time` expressions. That said, times should be as
+precise as possible---at least millisecond accuracy.
 
 ### Builtins
 
@@ -436,6 +449,7 @@ math functions:
 + The `to_int` function, which converts a `float` to an `int`, with
   positive and negative infinity converting into the maximum and
   minimum integers, and NaN converting to 0.
+
 JPL compilers must also provide the builtin `rgba` type, defined as
 described above.
 
@@ -466,11 +480,12 @@ fn g(x : int) : int {
 ```
 
 Shadowing is always illegal in JPL: it is a compile time error to bind
-a name that is already visible from the current scope, including a
-type alias. Thus, no JPL program can contain two functions with the
-same name, and it is always an error to introduce a function with the
-same name as a built-in function. It is not even legal to have a
-function-scoped variable with the same name as a global.
+a name that is already visible from the current scope. Thus, no JPL
+program can contain two functions with the same name, and it is always
+an error to introduce a function with the same name as a built-in
+function. It is not even legal to have a function-scoped variable with
+the same name as a global. However, two different functions can each
+have a local with the same name, so scoping still matters.
 
 ### Errors
 
@@ -482,18 +497,19 @@ compiler), but conceptually they must exist.
 At compile time, a JPL implementation must reject syntactically
 malformed inputs (those that are not accepted by the JPL grammar) as
 well as inputs that are accepted by the grammar, but that fail to type
-check. For example, a program containing the expression `a < b` where
+check. For example, a program containing the expression `a < b`, where
 `a` and `b` have different types, must be rejected at compile time.
 Note that array sizes are not part of the type system (though array
-rank is). Compile-time error messages should mention the line number
-where the problem was first detected and also a brief description of
-the problem.
+rank is). Compile-time error messages would ideally mention the line
+number where the problem was first detected and also a brief
+description of the problem.
 
 At run time, a JPL implementation must detect erroneous conditions. If
 any such condition occurs, the JPL program must be cleanly terminated
 (no segfaults or other OS-level traps!) and a brief, appropriate error
 message must be displayed that begins with the text `[abort]`.
-Run-time errors include:
+
+Run-time errors may be *internal*:
 
 - an integer division or modulus operation by zero[^1]
 
@@ -539,10 +555,10 @@ JPL compilers also need not preserve the type of internal or external
 error (for example, bounds checks could be implemented as assertions).
 
 There are some rarer exceptional conditions, like stack overflow or
-signal handling, where JPL programs are allowed to segfault or
-otherwise terminate uncleanly, and need not be preserved. As long as
-the compiler doesn't go out of its way to mess with this things should
-be fine.
+signal handling, which need not be preserved (it would be almost
+impossible to preserve them) and where JPL programs are allowed to
+segfault or otherwise terminate uncleanly. As long as the compiler
+doesn't go out of its way to mess with this things should be fine.
 
 ### Implementation Limits
 
@@ -554,13 +570,14 @@ functions that take more than 64 arguments. Basically, almost any
 occurrence of `...` in this specification only needs to be expanded 64
 times by a JPL compiler.
 
-However, the number of elements in an array constructed via an `array`
-loop should be limited only by available memory.
+This means literal arrays of more than 64 entries need not be
+supported. However, the number of elements in an array constructed via
+an `array` loop should be limited only by available memory.
 
 Runtime Representation
 ----------------------
 
-The special `void` structures has zero size.
+The special `void` structure has zero size.
 
 Integers, floats, and booleans all take up 64 bits. For booleans, this
 might seem wasteful, but it avoids having to deal with padding or
@@ -581,19 +598,16 @@ list of dimension sizes) is copied.
 JPL Compiler Command Line Interface
 -----------------------------------
 
-Every execution of a JPL compiler should print either `Compilation
-succeeded\n` or else `Compilation failed\n` to the standard output
-stream (stdout). The contents of the standard error stream (stderr)
-are unspecified---a compiler can use this for debug output, error
-tracebacks, or any other information it wants.
+The compilation should succeed if the input program is legal JPL, in
+which case the compiler should print `Compilation succeeded` to
+stdout. The compilation should fail if the input program is not legal
+JPL, in which case the compiler should print `Compilation failed` and
+optionally an error message describing what is wrong with the input
+program to stdout.
 
-The compilation should succeed if the input program is legal JPL, and
-in this case the compiler should not print anything else to stdout.
-The compilation should fail if the input program is not legal JPL, in
-which case, in addition to the `Compilation failed` message, an error
-message describing what is wrong with the input program should also be
-printed to stdout. A JPL compiler should produce no other output,
-except in cases described below.
+The contents of the standard error stream (stderr) are unspecified---a
+compiler can use this for debug output, error tracebacks, or any other
+information it wants.
 
 A JPL compiler is required to support the following command line options,
 which may occur in any order:
@@ -610,12 +624,14 @@ which may occur in any order:
     successful if the input file contains only the lexemes described
     in this spec; otherwise, the compilation fails.
 
-  - `-p`: Perform lexical analysis and parsing only, pretty-printing
-    the parsed program back to ASCII text in a format based on
-    s-expressions that is described in your assignments.  In this
-    case, the compilation is considered to be successful if the input
-    program corresponds to the grammar described in your current
-    assignment; otherwise, the compilation fails.
+  - `-p`: Perform lexical analysis and parsing only, printing the
+    parsed program back to ASCII text in an s-expression format that
+    is described in your assignments. In this case, the compilation is
+    considered to be successful if the input program corresponds to
+    the grammar described in your current assignment; otherwise, the
+    compilation fails. The instructor compiler supports an extra
+    `--pp` flag that pretty-prints the s-expressions, but this is
+    optional.)
 
   - `-t`: Perform lexical analysis, parsing, and type checking (but not
     code generation). In this case, the compilation is considered to be
